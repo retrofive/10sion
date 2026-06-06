@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hurricane Model Center - 10sion.net</title>
+  <meta name="description" content="Multi-model hurricane ensemble forecast tool comparing GFS, ECMWF, NAM, and UKMET with AI-powered synthesis." />
+  <link rel="stylesheet" href="/css/hurricane.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="/" class="site-logo">10sion.net</a>
+    <nav class="site-nav">
+      <a href="/" class="active">Hurricane Model Center</a>
+    </nav>
+  </header>
+  <main class="page-main">
+    <div class="page-hero">
+      <h1 class="page-title"><span class="title-icon">&#x1F300;</span> Hurricane Ensemble Model Center</h1>
+      <p class="page-desc">Compare GFS, ECMWF, NAM &amp; UKMET model forecasts. AI-synthesized NWS-style discussion. Optimized for Southwest Florida &amp; Gulf of Mexico threats.</p>
+      <div class="disclaimer"><span class="disc-icon">&#9888;</span> For situational awareness only. Always follow official NHC advisories and local emergency management guidance.</div>
+    </div>
+    <div class="tool-layout">
+      <aside class="controls-panel">
+        <section class="ctrl-section">
+          <p class="ctrl-label">Atmospheric conditions</p>
+          <div class="ctrl-group"><label class="ctrl-field-label" for="sst">Sea surface temp</label><div class="slider-row"><input type="range" id="sst" min="70" max="96" value="86" step="1" /><span class="slider-val" id="sst-v">86&deg;F</span></div></div>
+          <div class="ctrl-group"><label class="ctrl-field-label" for="shear">Wind shear</label><div class="slider-row"><input type="range" id="shear" min="0" max="50" value="8" step="1" /><span class="slider-val" id="shear-v">8 kt</span></div></div>
+          <div class="ctrl-group"><label class="ctrl-field-label" for="pressure">Central pressure</label><div class="slider-row"><input type="range" id="pressure" min="880" max="1010" value="968" step="1" /><span class="slider-val" id="pressure-v">968 mb</span></div></div>
+          <div class="ctrl-group"><label class="ctrl-field-label" for="humidity">Mid-level humidity</label><div class="slider-row"><input type="range" id="humidity" min="40" max="95" value="78" step="1" /><span class="slider-val" id="humidity-v">78%</span></div></div>
+        </section>
+        <section class="ctrl-section">
+          <p class="ctrl-label">Storm profile</p>
+          <div class="ctrl-group"><label class="ctrl-field-label" for="region">Region</label><select id="region"><option value="Gulf of Mexico - SW Florida approach" selected>Gulf - SW Florida</option><option value="Gulf of Mexico - Texas/Louisiana">Gulf - Texas/Louisiana</option><option value="Western Caribbean">Western Caribbean</option><option value="Eastern Caribbean">Eastern Caribbean</option><option value="Atlantic Basin - open ocean">Atlantic - open ocean</option><option value="Bay of Campeche">Bay of Campeche</option></select></div>
+          <div class="ctrl-group"><label class="ctrl-field-label" for="month">Season</label><select id="month"><option value="June - early season">June - early</option><option value="July">July</option><option value="August">August</option><option value="September - peak season" selected>September - peak</option><option value="October">October</option><option value="November - late season">November - late</option></select></div>
+          <div class="ctrl-group"><label class="ctrl-field-label" for="question">Question / scenario</label><textarea id="question" rows="3" placeholder="e.g. Compare to Hurricane Ian conditions. Will rapid intensification occur?"></textarea></div>
+        </section>
+        <button class="btn-analyze" id="run-btn" onclick="runForecast()">Run AI ensemble analysis</button>
+      </aside>
+      <div class="output-panel">
+        <section class="out-section">
+          <p class="out-label">Live classification</p>
+          <div class="cat-row"><div id="cat-badge" class="cat-badge cat-3">Category 3 - Major</div><div class="cat-stats"><div class="stat-pill"><span class="sp-label">Winds</span><span class="sp-val" id="sv-winds">120 mph</span></div><div class="stat-pill"><span class="sp-label">RI potential</span><span class="sp-val" id="sv-ri">High</span></div><div class="stat-pill"><span class="sp-label">Model spread</span><span class="sp-val" id="sv-spread">Low</span></div><div class="stat-pill"><span class="sp-label">Threat</span><span class="sp-val" id="sv-threat">High</span></div></div></div>
+          <div class="saffir-bar" id="sbar"><div class="ss" id="s0"></div><div class="ss" id="s1"></div><div class="ss" id="s2"></div><div class="ss" id="s3"></div><div class="ss" id="s4"></div><div class="ss" id="s5"></div><div class="ss" id="s6"></div></div>
+        </section>
+        <section class="out-section">
+          <p class="out-label">Ensemble track map</p>
+          <div class="map-wrap"><canvas id="trackMap" role="img" aria-label="Spaghetti model track map showing GFS, EURO, NAM, and UKMET projected hurricane paths"></canvas></div>
+          <div class="map-legend"><span class="leg"><span class="leg-dot" style="background:#2d7dd2;"></span>GFS</span><span class="leg"><span class="leg-dot" style="background:#3a7d44;"></span>EURO</span><span class="leg"><span class="leg-dot" style="background:#c4501a;"></span>NAM</span><span class="leg"><span class="leg-dot" style="background:#6b47c2;"></span>UKMET</span><span class="leg"><span class="leg-dot" style="background:#c0392b;border-radius:0;height:2px;width:18px;margin-top:5px;"></span>Consensus</span></div>
+        </section>
+        <section class="out-section">
+          <p class="out-label">72-hour model comparison</p>
+          <div class="model-grid">
+            <div class="model-card gfs-card"><div class="mc-header"><span class="mc-name">GFS</span><span class="mc-sub">NOAA American</span></div><div class="mc-body"><div class="mc-row"><span>72-hr intensity</span><strong id="gfs-int">-</strong></div><div class="mc-row"><span>Track bias</span><strong id="gfs-track">-</strong></div><div class="mc-row"><span>RI signal</span><strong id="gfs-ri">-</strong></div><div class="mc-row"><span>Landfall est.</span><strong id="gfs-lf">-</strong></div></div></div>
+            <div class="model-card euro-card"><div class="mc-header"><span class="mc-name">ECMWF</span><span class="mc-sub">European IFS 9km</span></div><div class="mc-body"><div class="mc-row"><span>72-hr intensity</span><strong id="euro-int">-</strong></div><div class="mc-row"><span>Track bias</span><strong id="euro-track">-</strong></div><div class="mc-row"><span>RI signal</span><strong id="euro-ri">-</strong></div><div class="mc-row"><span>Landfall est.</span><strong id="euro-lf">-</strong></div></div></div>
+            <div class="model-card nam-card"><div class="mc-header"><span class="mc-name">NAM</span><span class="mc-sub">NOAA N. American 12km</span></div><div class="mc-body"><div class="mc-row"><span>72-hr intensity</span><strong id="nam-int">-</strong></div><div class="mc-row"><span>Track bias</span><strong id="nam-track">-</strong></div><div class="mc-row"><span>RI signal</span><strong id="nam-ri">-</strong></div><div class="mc-row"><span>Landfall est.</span><strong id="nam-lf">-</strong></div></div></div>
+            <div class="model-card ukmet-card"><div class="mc-header"><span class="mc-name">UKMET</span><span class="mc-sub">UK Met Office</span></div><div class="mc-body"><div class="mc-row"><span>72-hr intensity</span><strong id="uk-int">-</strong></div><div class="mc-row"><span>Track bias</span><strong id="uk-track">-</strong></div><div class="mc-row"><span>RI signal</span><strong id="uk-ri">-</strong></div><div class="mc-row"><span>Landfall est.</span><strong id="uk-lf">-</strong></div></div></div>
+          </div>
+        </section>
+        <section class="out-section" id="ai-section" style="display:none;"><p class="out-label">AI ensemble synthesis</p><div class="ai-output" id="ai-output"></div><div class="consensus-section" id="consensus-section"></div></section>
+        <div class="loading-bar" id="loading-bar" style="display:none;"><div class="loading-fill" id="loading-fill"></div></div>
+        <div class="error-msg" id="error-msg" style="display:none;"></div>
+      </div>
+    </div>
+  </main>
+  <footer class="site-footer"><p>10sion.net &mdash; Hurricane Model Center &mdash; For situational awareness only. Always follow <a href="https://www.nhc.noaa.gov" target="_blank" rel="noopener">NHC official advisories</a>.</p></footer>
+  <script src="/js/hurricane.js"></script>
+</body>
+</html>

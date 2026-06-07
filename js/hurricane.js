@@ -6,10 +6,10 @@
   const opts = {6:"June - early season",7:"July",8:"August",9:"September - peak season",10:"October",11:"November - late season"};
   const label = opts[m] || (m<=5?"June - early season":"November - late season");
   const sel = document.getElementById("month");
-  if(sel) for(var i=0;i<sel.options.length;i++) if(sel.options[i].value===label||sel.options[i].value.startsWith(["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m-1])){sel.selectedIndex=i;break;}
+  if(sel) for(var i=0;i<sel.options.length;i++) if(sel.options[i].value===label){sel.selectedIndex=i;break;}
 })();
 
-const SLIDERS=[{id:"sst",out:"sst-v",fmt:v=>v+"°F"},{id:"shear",out:"shear-v",fmt:v=>v+" kt"},{id:"pressure",out:"pressure-v",fmt:v=>v+" mb"},{id:"humidity",out:"humidity-v",fmt:v=>v+"%"}];
+const SLIDERS=[{id:"sst",out:"sst-v",fmt:v=>v+"\u00b0F"},{id:"shear",out:"shear-v",fmt:v=>v+" kt"},{id:"pressure",out:"pressure-v",fmt:v=>v+" mb"},{id:"humidity",out:"humidity-v",fmt:v=>v+"%"}];
 SLIDERS.forEach(function(s){const el=document.getElementById(s.id);if(!el)return;el.addEventListener("input",function(){document.getElementById(s.out).textContent=s.fmt(el.value);updateLive();});});
 ["region","month"].forEach(function(id){const el=document.getElementById(id);if(el)el.addEventListener("change",updateLive);});
 
@@ -66,110 +66,175 @@ function updateLive(){
   drawMap(sst,shear,pressure,region);
 }
 
+// Region configs: viewport bounds + storm origin + landfall destination
+var REGION_CONFIG = {
+  "Gulf of Mexico - SW Florida approach": {l0:-95,l1:-79,a0:21,a1:32,   sLon:-89,sLat:22.5,dLon:-82,  dLat:26.3,wlbl:"Gulf of Mexico",wlon:-88,wlat:24},
+  "Gulf of Mexico - Texas/Louisiana":     {l0:-99,l1:-83,a0:22,a1:33,   sLon:-93,sLat:21.5,dLon:-93.5,dLat:29.5,wlbl:"Gulf of Mexico",wlon:-92,wlat:25},
+  "Western Caribbean":                    {l0:-92,l1:-76,a0:13,a1:26,   sLon:-84,sLat:14.5,dLon:-81,  dLat:22.5,wlbl:"Caribbean Sea", wlon:-85,wlat:17},
+  "Eastern Caribbean":                    {l0:-85,l1:-60,a0:11,a1:24,   sLon:-67,sLat:13,  dLon:-78,  dLat:21.5,wlbl:"Atlantic Ocean",wlon:-73,wlat:16},
+  "Atlantic Basin - open ocean":          {l0:-88,l1:-58,a0:17,a1:36,   sLon:-65,sLat:19,  dLon:-75,  dLat:33.5,wlbl:"Atlantic Ocean",wlon:-73,wlat:26},
+  "Bay of Campeche":                      {l0:-98,l1:-86,a0:16,a1:27,   sLon:-93,sLat:18.5,dLon:-89.5,dLat:24,  wlbl:"Bay of Campeche",wlon:-92,wlat:20}
+};
+
+var _geoLoaded = false;
+var _worldTopo = null;
+var _usTopo = null;
+
+function loadGeoData(callback){
+  if(_geoLoaded){callback();return;}
+  var s=document.createElement("script");
+  s.src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js";
+  s.onload=function(){
+    var w=new XMLHttpRequest();
+    w.open("GET","https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json");
+    w.onload=function(){
+      _worldTopo=JSON.parse(w.responseText);
+      var u=new XMLHttpRequest();
+      u.open("GET","https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json");
+      u.onload=function(){_usTopo=JSON.parse(u.responseText);_geoLoaded=true;callback();};
+      u.send();
+    };
+    w.send();
+  };
+  document.head.appendChild(s);
+}
+
 function drawMap(sst,shear,pressure,region){
-  const canvas=document.getElementById("trackMap");
+  var canvas=document.getElementById("trackMap");
   if(!canvas)return;
-  const W=680,H=320;
-  canvas.width=W;canvas.height=H;
-  const ctx=canvas.getContext("2d");
+  var W=720,H=340;canvas.width=W;canvas.height=H;
+  var ctx=canvas.getContext("2d");
 
-  // Projection: lon -100..-78, lat 17..33
-  const L0=-100,L1=-78,A0=17,A1=33;
-  function px(lon,lat){return[Math.round((lon-L0)/(L1-L0)*W),Math.round((A1-lat)/(A1-A0)*H)];}
+  // Ocean fill immediately so it's never blank
+  var seaG=ctx.createLinearGradient(0,0,0,H);
+  seaG.addColorStop(0,"#0a2240");seaG.addColorStop(1,"#060f20");
+  ctx.fillStyle=seaG;ctx.fillRect(0,0,W,H);
 
-  // Ocean
-  var grad=ctx.createLinearGradient(0,0,0,H);
-  grad.addColorStop(0,"#071425");grad.addColorStop(1,"#0d2040");
-  ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
-
-  // Grid
-  ctx.strokeStyle="rgba(80,120,180,0.12)";ctx.lineWidth=0.5;
-  for(var lo=-98;lo<=-80;lo+=2){var a=px(lo,A0),b=px(lo,A1);ctx.beginPath();ctx.moveTo(a[0],H);ctx.lineTo(b[0],0);ctx.stroke();}
-  for(var la=18;la<=32;la+=2){var a=px(L0,la);ctx.beginPath();ctx.moveTo(0,a[1]);ctx.lineTo(W,a[1]);ctx.stroke();}
-
-  // Land fill helper
-  function land(pts,fill){
-    ctx.beginPath();
-    pts.forEach(function(p,i){var q=px(p[0],p[1]);i===0?ctx.moveTo(q[0],q[1]):ctx.lineTo(q[0],q[1]);});
-    ctx.closePath();ctx.fillStyle=fill;ctx.fill();
-    ctx.strokeStyle="rgba(160,200,120,0.35)";ctx.lineWidth=0.8;ctx.stroke();
+  if(!_geoLoaded){
+    loadGeoData(function(){drawMap(sst,shear,pressure,region);});
+    ctx.fillStyle="rgba(120,180,240,0.3)";ctx.font="12px monospace";
+    ctx.textAlign="center";ctx.fillText("Loading map...",W/2,H/2);
+    return;
   }
 
-  // US top bar
-  ctx.fillStyle="#18241a";ctx.fillRect(0,0,W,px(L0,33)[1]);
+  var rc=REGION_CONFIG[region]||REGION_CONFIG["Gulf of Mexico - SW Florida approach"];
+  var l0=rc.l0,l1=rc.l1,a0=rc.a0,a1=rc.a1;
 
-  // Texas
-  land([[-100,33],[-100,26],[-97,26],[-97,28],[-94.5,29.5],[-94,30],[-94,33]],"#1a2a1c");
-  // Louisiana
-  land([[-94,33],[-94,30],[-93,29.5],[-91,29],[-89.5,29],[-89,29.5],[-88.8,30.3],[-89,31],[-91,31.5],[-94,33]],"#1a2a1c");
-  // MS/AL panhandle coast
-  land([[-88.8,30.3],[-88.2,30.4],[-87.5,30.4],[-85.5,30.4],[-85,30.0],[-87,30],[-88,29.5],[-88.8,30.3]],"#1a2a1c");
-  // Florida
-  land([[-87.6,30.6],[-85,29.9],[-84.2,30.1],[-83.2,30.2],[-82.6,29.6],[-82,29.5],[-81.8,28.5],[-81.5,27],[-81.2,26],[-80.4,25.3],[-80.1,25.7],[-80.3,27.5],[-80.8,28.5],[-81.5,30.2],[-84.5,30.2],[-85.5,30.5],[-87.6,30.6]],"#1a2a1c");
-  // Georgia/Carolinas coast
-  land([[-85.5,30.5],[-82,31],[-81,31.5],[-80,32.5],[-79,33.5],[-79,33],[-81,32],[-83,31],[-85,31],[-85.5,30.5]],"#1a2a1c");
+  function proj(lon,lat){return[(lon-l0)/(l1-l0)*W,(a1-lat)/(a1-a0)*H];}
 
-  // Mexico
-  land([[-100,28],[-100,24],[-97,19],[-92,19],[-90,21],[-87,21],[-87,17],[-91,17],[-95,19],[-97,26],[-100,28]],"#1a2a1c");
-  // Yucatan
-  land([[-90,21],[-87,21],[-87,18],[-90,18],[-90,21]],"#1a2a1c");
-  // Cuba
-  land([[-85,22.5],[-82,23],[-79.5,22],[-78,20],[-80,20],[-83,22],[-85,22.5]],"#1a2a1c");
+  // Subtle shimmer
+  ctx.strokeStyle="rgba(20,70,130,0.06)";ctx.lineWidth=1;
+  for(var y=20;y<H;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.bezierCurveTo(W*.3,y-3,W*.7,y+3,W,y);ctx.stroke();}
 
-  // Water labels
-  ctx.textAlign="center";ctx.textBaseline="middle";
-  ctx.fillStyle="rgba(100,160,220,0.4)";ctx.font="italic 11px 'IBM Plex Mono',monospace";
-  var gp=px(-90,22.5);ctx.fillText("Gulf of Mexico",gp[0],gp[1]);
-  var cp=px(-82.5,18.5);ctx.fillText("Caribbean Sea",cp[0],cp[1]);
+  // Warm water tint
+  if(region.indexOf("Gulf")!==-1||region.indexOf("Campeche")!==-1){
+    var cx2=proj((l0+l1)/2,(a0+a1)*0.4);
+    var warm=ctx.createRadialGradient(cx2[0],cx2[1],0,cx2[0],cx2[1],180);
+    warm.addColorStop(0,"rgba(15,80,60,0.10)");warm.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle=warm;ctx.fillRect(0,0,W,H);
+  }
 
-  // State labels
-  ctx.fillStyle="rgba(180,220,150,0.45)";ctx.font="bold 9px 'IBM Plex Mono',monospace";
-  [["FL",px(-82,27.5)],["TX",px(-98,30)],["LA",px(-91.5,30.5)],["MS",px(-89,31.5)],["AL",px(-86.5,31.5)],["GA",px(-83.5,32)]].forEach(function(l){ctx.fillText(l[0],l[1][0],l[1][1]);});
-
-  // Storm tracks
-  const sw=region.indexOf("SW Florida")!==-1;
-  const ri=sst>=86&&shear<=12;
-  var sLon=-93+((1010-pressure)/130)*3;
-  var sLat=20+((sst-70)/26)*2;
-  var dLon=sw?-81.8:-95.5,dLat=sw?26.2:29.5;
-  var N=12;
-
-  var models=[
-    {c:"#4a9eff",d:[],la:sw?0.4:-0.2,lo:sw?0.3:0.4},
-    {c:"#4caf70",d:[],la:sw?0.7:0.5,lo:sw?-0.4:-0.3},
-    {c:"#ff7043",d:[4,3],la:sw?0.1:0.1,lo:sw?0.5:0.6},
-    {c:"#9c7eff",d:[2,2],la:sw?0.8:0.4,lo:sw?-0.1:0.2},
-  ];
-
-  models.forEach(function(m){
-    ctx.strokeStyle=m.c;ctx.lineWidth=1.8;ctx.setLineDash(m.d);
+  // Draw a geometry
+  function pathGeo(geo){
     ctx.beginPath();
-    for(var i=0;i<=N;i++){
-      var t=i/N,cv=Math.sin(t*Math.PI);
-      var lon=sLon+(dLon-sLon)*t+cv*m.lo*(ri?1.3:0.9);
-      var lat=sLat+(dLat-sLat)*t+cv*m.la;
-      var p=px(lon,lat);i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);
-    }
-    ctx.stroke();
-    // endpoint dot
-    var ep=px(dLon+m.lo*0.3,dLat+m.la*0.3);
-    ctx.setLineDash([]);ctx.beginPath();ctx.arc(ep[0],ep[1],3.5,0,Math.PI*2);ctx.fillStyle=m.c;ctx.fill();
+    function drawRings(rings){rings.forEach(function(ring){ring.forEach(function(pt,i){var q=proj(pt[0],pt[1]);i===0?ctx.moveTo(q[0],q[1]):ctx.lineTo(q[0],q[1]);});ctx.closePath();});}
+    if(geo.type==="Polygon")drawRings(geo.coordinates);
+    else if(geo.type==="MultiPolygon")geo.coordinates.forEach(drawRings);
+  }
+
+  // Bbox check
+  function inView(geo){
+    var mn=999,mx=-999,ma=999,xa=-999;
+    function wk(c){if(typeof c[0]==="number"){mn=Math.min(mn,c[0]);mx=Math.max(mx,c[0]);ma=Math.min(ma,c[1]);xa=Math.max(xa,c[1]);}else c.forEach(wk);}
+    if(geo.type==="Polygon")wk(geo.coordinates);
+    else if(geo.type==="MultiPolygon")geo.coordinates.forEach(function(c){wk(c);});
+    return mx>l0-2&&mn<l1+2&&xa>a0-2&&ma<a1+2;
+  }
+
+  var lg=ctx.createLinearGradient(0,0,0,H);lg.addColorStop(0,"#1e3514");lg.addColorStop(1,"#192e10");
+
+  // World countries
+  var allC=topojson.feature(_worldTopo,_worldTopo.objects.countries);
+  allC.features.forEach(function(f){
+    if(!inView(f.geometry))return;
+    ctx.shadowColor="rgba(0,0,0,0.65)";ctx.shadowBlur=6;
+    pathGeo(f.geometry);ctx.fillStyle=lg;ctx.fill("evenodd");ctx.shadowBlur=0;
+    pathGeo(f.geometry);ctx.strokeStyle="rgba(155,210,110,0.45)";ctx.lineWidth=0.85;ctx.stroke();
   });
 
-  // Consensus
-  ctx.strokeStyle="#ff4444";ctx.lineWidth=1.5;ctx.setLineDash([8,5]);
-  ctx.beginPath();
-  for(var i=0;i<=N;i++){var t=i/N,p=px(sLon+(dLon-sLon)*t,sLat+(dLat-sLat)*t);i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);}
-  ctx.stroke();ctx.setLineDash([]);
+  // US states
+  var allS=topojson.feature(_usTopo,_usTopo.objects.states);
+  var slbls={"48":"TX","22":"LA","28":"MS","01":"AL","12":"FL","13":"GA","45":"SC","37":"NC","51":"VA"};
+  allS.features.forEach(function(f){
+    if(!inView(f.geometry))return;
+    ctx.shadowColor="rgba(0,0,0,0.65)";ctx.shadowBlur=6;
+    pathGeo(f.geometry);ctx.fillStyle=lg;ctx.fill("evenodd");ctx.shadowBlur=0;
+    pathGeo(f.geometry);ctx.strokeStyle="rgba(155,210,110,0.45)";ctx.lineWidth=0.85;ctx.stroke();
+    pathGeo(f.geometry);ctx.strokeStyle="rgba(180,220,130,0.15)";ctx.lineWidth=0.5;ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);
+  });
 
-  // Storm symbol
-  var op=px(sLon,sLat);
-  const catColor={TD:"#808080",TS:"#3a7d44","1":"#2d7dd2","2":"#3a7d44","3":"#c4501a","4":"#b01e1e","5":"#c0392b"};
-  const r2=getClassification(sst,shear,pressure,+document.getElementById("humidity").value);
-  ctx.beginPath();ctx.arc(op[0],op[1],11,0,Math.PI*2);ctx.strokeStyle=catColor[r2.cat]||"#c0392b";ctx.lineWidth=2.5;ctx.stroke();
-  ctx.beginPath();ctx.arc(op[0],op[1],8,0,Math.PI*2);ctx.fillStyle="#c0392b";ctx.fill();
-  ctx.fillStyle="#fff";ctx.font="bold 9px monospace";ctx.textAlign="center";ctx.textBaseline="middle";
-  ctx.fillText("L",op[0],op[1]);
+  // State labels
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillStyle="rgba(200,235,160,0.45)";ctx.font="bold 9px 'IBM Plex Mono',monospace";
+  allS.features.forEach(function(f){
+    var lbl=slbls[f.id];if(!lbl||!inView(f.geometry))return;
+    var xs=[],ys=[];
+    function wc(c){if(typeof c[0]==="number"){xs.push(c[0]);ys.push(c[1]);}else c.forEach(wc);}
+    if(f.geometry.type==="Polygon")wc(f.geometry.coordinates);
+    else if(f.geometry.type==="MultiPolygon")f.geometry.coordinates.forEach(function(c){wc(c);});
+    var cx=xs.reduce(function(a,b){return a+b;},0)/xs.length;
+    var cy=ys.reduce(function(a,b){return a+b;},0)/ys.length;
+    if(cx<l0||cx>l1||cy<a0||cy>a1)return;
+    var q=proj(cx,cy);ctx.fillText(lbl,q[0],q[1]);
+  });
+
+  // Water label
+  if(rc.wlbl){
+    ctx.fillStyle="rgba(120,185,245,0.28)";ctx.font="italic 12px Georgia,serif";
+    var wq=proj(rc.wlon,rc.wlat);ctx.fillText(rc.wlbl,wq[0],wq[1]);
+  }
+
+  // === Storm tracks ===
+  var ri=sst>=86&&shear<=12;
+  var sLon=rc.sLon+((1010-pressure)/130)*2;
+  var sLat=rc.sLat+((sst-70)/26)*1;
+  var dLon=rc.dLon,dLat=rc.dLat;
+  var N=18;
+  var tracks=[
+    {c:"#5ab4ff",w:1.8,d:[],    lv:0.55, lnv:0.32},
+    {c:"#5dd88a",w:1.8,d:[],    lv:-0.50,lnv:-0.45},
+    {c:"#ff8c5a",w:1.5,d:[5,4], lv:0.15, lnv:0.65},
+    {c:"#b08fff",w:1.5,d:[2,3], lv:1.05, lnv:-0.22}
+  ];
+
+  tracks.forEach(function(m){
+    var scale=ri?1.3:0.85;
+    ctx.save();ctx.globalAlpha=0.10;ctx.strokeStyle=m.c;ctx.lineWidth=8;ctx.setLineDash([]);
+    ctx.beginPath();
+    for(var i=0;i<=N;i++){var t=i/N,cv=Math.sin(t*Math.PI),lon=sLon+(dLon-sLon)*t+cv*m.lnv*scale,lat=sLat+(dLat-sLat)*t+cv*m.lv*scale,q=proj(lon,lat);i===0?ctx.moveTo(q[0],q[1]):ctx.lineTo(q[0],q[1]);}
+    ctx.stroke();ctx.restore();
+    ctx.globalAlpha=0.85;ctx.strokeStyle=m.c;ctx.lineWidth=m.w;ctx.setLineDash(m.d);
+    ctx.beginPath();
+    for(var i=0;i<=N;i++){var t=i/N,cv=Math.sin(t*Math.PI),lon=sLon+(dLon-sLon)*t+cv*m.lnv*scale,lat=sLat+(dLat-sLat)*t+cv*m.lv*scale,q=proj(lon,lat);i===0?ctx.moveTo(q[0],q[1]):ctx.lineTo(q[0],q[1]);}
+    ctx.stroke();
+    var ep=proj(dLon+m.lnv*0.3,dLat+m.lv*0.3);ctx.setLineDash([]);ctx.globalAlpha=1;
+    ctx.beginPath();ctx.arc(ep[0],ep[1],3,0,Math.PI*2);ctx.fillStyle=m.c;ctx.fill();
+  });
+
+  ctx.globalAlpha=0.9;ctx.strokeStyle="#ff5555";ctx.lineWidth=1.5;ctx.setLineDash([9,5]);
+  ctx.beginPath();
+  for(var i=0;i<=N;i++){var t=i/N,q=proj(sLon+(dLon-sLon)*t,sLat+(dLat-sLat)*t);i===0?ctx.moveTo(q[0],q[1]):ctx.lineTo(q[0],q[1]);}
+  ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+
+  var op=proj(sLon,sLat);
+  var sc=(sst-70)*1.8-shear*2.5+(1013-pressure)*0.6;
+  var cr=sc<10?"#9a9a9a":sc<25?"#5dd88a":sc<45?"#5ab4ff":sc<65?"#5dd88a":sc<85?"#ff8c5a":sc<105?"#e05050":"#c0392b";
+  ctx.beginPath();ctx.arc(op[0],op[1],16,0,Math.PI*2);ctx.strokeStyle=cr;ctx.lineWidth=1;ctx.globalAlpha=0.25;ctx.stroke();ctx.globalAlpha=1;
+  var sg=ctx.createRadialGradient(op[0]-2,op[1]-2,1,op[0],op[1],10);
+  sg.addColorStop(0,"#d93030");sg.addColorStop(1,"#7a0000");
+  ctx.beginPath();ctx.arc(op[0],op[1],10,0,Math.PI*2);ctx.fillStyle=sg;ctx.fill();
+  ctx.strokeStyle=cr;ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle="#fff";ctx.font="bold 10px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("L",op[0],op[1]);
   ctx.textAlign="left";ctx.textBaseline="alphabetic";
 }
 
@@ -187,7 +252,7 @@ async function runForecast(){
     clearInterval(tick);lf.style.width="100%";
     if(!res.ok){const e=await res.json().catch(function(){return{};});throw new Error(e.error||"HTTP "+res.status);}
     const data=await res.json();as.style.display="block";ao.textContent=data.forecast||"No forecast returned.";
-    const items=[{label:"GFS confidence",val:md.gfs.ri==="Low"?72:55,color:"#4a9eff"},{label:"ECMWF confidence",val:md.euro.ri.indexOf("High")===0?88:70,color:"#4caf70"},{label:"NAM confidence",val:68,color:"#ff7043"},{label:"UKMET confidence",val:md.ukmet.ri.indexOf("High")===0?82:65,color:"#9c7eff"},{label:"Ensemble consensus",val:md.spread==="Low"?85:md.spread==="Moderate"?68:50,color:"#ff4444"}];
+    const items=[{label:"GFS confidence",val:md.gfs.ri==="Low"?72:55,color:"#5ab4ff"},{label:"ECMWF confidence",val:md.euro.ri.indexOf("High")===0?88:70,color:"#5dd88a"},{label:"NAM confidence",val:68,color:"#ff8c5a"},{label:"UKMET confidence",val:md.ukmet.ri.indexOf("High")===0?82:65,color:"#b08fff"},{label:"Ensemble consensus",val:md.spread==="Low"?85:md.spread==="Moderate"?68:50,color:"#ff5555"}];
     document.getElementById("consensus-section").innerHTML="<p class='cons-title'>Model confidence</p>"+items.map(function(x){return"<div class='cons-row'><div class='cons-meta'><span>"+x.label+"</span><span class='cons-val'>"+x.val+"%</span></div><div class='cons-track'><div class='cons-fill' style='width:"+x.val+"%;background:"+x.color+";'></div></div></div>";}).join("");
   }catch(err){clearInterval(tick);em.style.display="block";em.textContent="Error: "+err.message;lb.style.display="none";}
   finally{setTimeout(function(){lb.style.display="none";lf.style.width="0%";},600);btn.disabled=false;btn.textContent="Regenerate ensemble analysis";}

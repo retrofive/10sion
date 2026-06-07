@@ -3,70 +3,218 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hurricane Model Center - 10sion.net</title>
-  <meta name="description" content="Multi-model hurricane ensemble forecast tool comparing GFS, ECMWF, NAM, and UKMET with AI-powered synthesis." />
-  <link rel="stylesheet" href="/css/hurricane.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <title>10sion</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: #050a14;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+      color: #e8edf5;
+    }
+
+    /* Animated grid */
+    .grid {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(30,90,180,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(30,90,180,0.07) 1px, transparent 1px);
+      background-size: 60px 60px;
+      animation: gridShift 20s linear infinite;
+    }
+    @keyframes gridShift {
+      0%   { background-position: 0 0; }
+      100% { background-position: 60px 60px; }
+    }
+
+    /* Glow blobs */
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.18;
+    }
+    .blob-1 {
+      width: 500px; height: 500px;
+      background: #1e5cbf;
+      top: -120px; left: -100px;
+      animation: float1 12s ease-in-out infinite;
+    }
+    .blob-2 {
+      width: 400px; height: 400px;
+      background: #0e9aa7;
+      bottom: -100px; right: -80px;
+      animation: float1 12s ease-in-out infinite;
+      animation-delay: -6s;
+    }
+    .blob-3 {
+      width: 300px; height: 300px;
+      background: #7c3aed;
+      top: 50%; left: 50%;
+      animation: float3 12s ease-in-out infinite;
+      animation-delay: -3s;
+    }
+    @keyframes float1 {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50%       { transform: translateY(-30px) scale(1.05); }
+    }
+    @keyframes float3 {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      50%       { transform: translate(-50%, calc(-50% - 20px)) scale(1.05); }
+    }
+
+    /* SVG arcs */
+    .arcs {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    /* Card */
+    .card {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      padding: 3rem 4rem;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      backdrop-filter: blur(12px);
+      max-width: 540px;
+      width: 90%;
+      box-shadow: 0 0 80px rgba(14,154,167,0.08), 0 24px 64px rgba(0,0,0,0.5);
+    }
+
+    .wordmark {
+      font-size: 3.8rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      background: linear-gradient(135deg, #a8d8ff 0%, #5ab4ff 40%, #0e9aa7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.25rem;
+    }
+
+    .tagline {
+      font-size: 0.78rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(160,190,230,0.5);
+      margin-bottom: 2.5rem;
+    }
+
+    .divider {
+      width: 48px;
+      height: 2px;
+      background: linear-gradient(90deg, #5ab4ff, #0e9aa7);
+      margin: 0 auto 2.5rem;
+      border-radius: 2px;
+    }
+
+    .coming-soon {
+      font-size: 1rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: rgba(200,220,255,0.65);
+      margin-bottom: 0.75rem;
+    }
+
+    .message {
+      font-size: 1.05rem;
+      color: rgba(200,220,255,0.45);
+      line-height: 1.65;
+      font-weight: 300;
+    }
+
+    /* Pulse indicator */
+    .pulse-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 2.5rem;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #0e9aa7;
+      box-shadow: 0 0 10px #0e9aa7;
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+    .pulse-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(14,154,167,0.8);
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1;   transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.75); }
+    }
+  </style>
 </head>
 <body>
-  <header class="site-header">
-    <a href="/" class="site-logo">10sion.net</a>
-    <nav class="site-nav">
-      <a href="/" class="active">Hurricane Model Center</a>
-    </nav>
-  </header>
-  <main class="page-main">
-    <div class="page-hero">
-      <h1 class="page-title"><span class="title-icon">&#x1F300;</span> Hurricane Ensemble Model Center</h1>
-      <p class="page-desc">Compare GFS, ECMWF, NAM &amp; UKMET model forecasts. AI-synthesized NWS-style discussion. Optimized for Southwest Florida &amp; Gulf of Mexico threats.</p>
-      <div class="disclaimer"><span class="disc-icon">&#9888;</span> For situational awareness only. Always follow official NHC advisories and local emergency management guidance.</div>
+
+  <div class="grid"></div>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <svg class="arcs" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="arcG1" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%"   stop-color="#5ab4ff" stop-opacity="0"/>
+        <stop offset="50%"  stop-color="#5ab4ff" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="#5ab4ff" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="arcG2" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%"   stop-color="#0e9aa7" stop-opacity="0"/>
+        <stop offset="50%"  stop-color="#0e9aa7" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="#0e9aa7" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="M -100 700 Q 400 100 1000 500 T 1600 200" stroke="url(#arcG1)" stroke-width="1.2" fill="none">
+      <animate attributeName="d"
+        values="M -100 700 Q 400 100 1000 500 T 1600 200;
+                M -100 600 Q 500 200 900 400 T 1600 300;
+                M -100 700 Q 400 100 1000 500 T 1600 200"
+        dur="14s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 1600 100 Q 1000 600 400 300 T -200 700" stroke="url(#arcG2)" stroke-width="1" fill="none">
+      <animate attributeName="d"
+        values="M 1600 100 Q 1000 600 400 300 T -200 700;
+                M 1600 200 Q 900 500 500 250 T -200 600;
+                M 1600 100 Q 1000 600 400 300 T -200 700"
+        dur="18s" repeatCount="indefinite"/>
+    </path>
+    <path d="M 200 -50 Q 600 400 1100 200 T 1500 800" stroke="url(#arcG1)" stroke-width="0.8" fill="none" opacity="0.5">
+      <animate attributeName="d"
+        values="M 200 -50 Q 600 400 1100 200 T 1500 800;
+                M 300 -50 Q 700 350 1000 300 T 1500 900;
+                M 200 -50 Q 600 400 1100 200 T 1500 800"
+        dur="22s" repeatCount="indefinite"/>
+    </path>
+  </svg>
+
+  <div class="card">
+    <div class="wordmark">10sion</div>
+    <div class="tagline">Something is coming</div>
+    <div class="divider"></div>
+    <div class="coming-soon">Coming Soon</div>
+    <p class="message">We're building something new.<br>Check back soon.</p>
+    <div class="pulse-wrap">
+      <div class="dot"></div>
+      <span class="pulse-label">In development</span>
     </div>
-    <div class="tool-layout">
-      <aside class="controls-panel">
-        <section class="ctrl-section">
-          <p class="ctrl-label">Atmospheric conditions</p>
-          <div class="ctrl-group"><label class="ctrl-field-label" for="sst">Sea surface temp</label><div class="slider-row"><input type="range" id="sst" min="70" max="96" value="86" step="1" /><span class="slider-val" id="sst-v">86&deg;F</span></div></div>
-          <div class="ctrl-group"><label class="ctrl-field-label" for="shear">Wind shear</label><div class="slider-row"><input type="range" id="shear" min="0" max="50" value="8" step="1" /><span class="slider-val" id="shear-v">8 kt</span></div></div>
-          <div class="ctrl-group"><label class="ctrl-field-label" for="pressure">Central pressure</label><div class="slider-row"><input type="range" id="pressure" min="880" max="1010" value="968" step="1" /><span class="slider-val" id="pressure-v">968 mb</span></div></div>
-          <div class="ctrl-group"><label class="ctrl-field-label" for="humidity">Mid-level humidity</label><div class="slider-row"><input type="range" id="humidity" min="40" max="95" value="78" step="1" /><span class="slider-val" id="humidity-v">78%</span></div></div>
-        </section>
-        <section class="ctrl-section">
-          <p class="ctrl-label">Storm profile</p>
-          <div class="ctrl-group"><label class="ctrl-field-label" for="region">Region</label><select id="region"><option value="Gulf of Mexico - SW Florida approach" selected>Gulf - SW Florida</option><option value="Gulf of Mexico - Texas/Louisiana">Gulf - Texas/Louisiana</option><option value="Western Caribbean">Western Caribbean</option><option value="Eastern Caribbean">Eastern Caribbean</option><option value="Atlantic Basin - open ocean">Atlantic - open ocean</option><option value="Bay of Campeche">Bay of Campeche</option></select></div>
-          <div class="ctrl-group"><label class="ctrl-field-label" for="month">Season</label><select id="month"><option value="June - early season">June - early</option><option value="July">July</option><option value="August">August</option><option value="September - peak season" selected>September - peak</option><option value="October">October</option><option value="November - late season">November - late</option></select></div>
-          <div class="ctrl-group"><label class="ctrl-field-label" for="question">Question / scenario</label><textarea id="question" rows="3" placeholder="e.g. Compare to Hurricane Ian conditions. Will rapid intensification occur?"></textarea></div>
-        </section>
-        <button class="btn-analyze" id="run-btn" onclick="runForecast()">Run AI ensemble analysis</button>
-      </aside>
-      <div class="output-panel">
-        <section class="out-section">
-          <p class="out-label">Live classification</p>
-          <div class="cat-row"><div id="cat-badge" class="cat-badge cat-3">Category 3 - Major</div><div class="cat-stats"><div class="stat-pill"><span class="sp-label">Winds</span><span class="sp-val" id="sv-winds">120 mph</span></div><div class="stat-pill"><span class="sp-label">RI potential</span><span class="sp-val" id="sv-ri">High</span></div><div class="stat-pill"><span class="sp-label">Model spread</span><span class="sp-val" id="sv-spread">Low</span></div><div class="stat-pill"><span class="sp-label">Threat</span><span class="sp-val" id="sv-threat">High</span></div></div></div>
-          <div class="saffir-bar" id="sbar"><div class="ss" id="s0"></div><div class="ss" id="s1"></div><div class="ss" id="s2"></div><div class="ss" id="s3"></div><div class="ss" id="s4"></div><div class="ss" id="s5"></div><div class="ss" id="s6"></div></div>
-        </section>
-        <section class="out-section">
-          <p class="out-label">Ensemble track map</p>
-          <div class="map-wrap"><canvas id="trackMap" role="img" aria-label="Spaghetti model track map showing GFS, EURO, NAM, and UKMET projected hurricane paths"></canvas></div>
-          <div class="map-legend"><span class="leg"><span class="leg-dot" style="background:#2d7dd2;"></span>GFS</span><span class="leg"><span class="leg-dot" style="background:#3a7d44;"></span>EURO</span><span class="leg"><span class="leg-dot" style="background:#c4501a;"></span>NAM</span><span class="leg"><span class="leg-dot" style="background:#6b47c2;"></span>UKMET</span><span class="leg"><span class="leg-dot" style="background:#c0392b;border-radius:0;height:2px;width:18px;margin-top:5px;"></span>Consensus</span></div>
-        </section>
-        <section class="out-section">
-          <p class="out-label">72-hour model comparison</p>
-          <div class="model-grid">
-            <div class="model-card gfs-card"><div class="mc-header"><span class="mc-name">GFS</span><span class="mc-sub">NOAA American</span></div><div class="mc-body"><div class="mc-row"><span>72-hr intensity</span><strong id="gfs-int">-</strong></div><div class="mc-row"><span>Track bias</span><strong id="gfs-track">-</strong></div><div class="mc-row"><span>RI signal</span><strong id="gfs-ri">-</strong></div><div class="mc-row"><span>Landfall est.</span><strong id="gfs-lf">-</strong></div></div></div>
-            <div class="model-card euro-card"><div class="mc-header"><span class="mc-name">ECMWF</span><span class="mc-sub">European IFS 9km</span></div><div class="mc-body"><div class="mc-row"><span>72-hr intensity</span><strong id="euro-int">-</strong></div><div class="mc-row"><span>Track bias</span><strong id="euro-track">-</strong></div><div class="mc-row"><span>RI signal</span><strong id="euro-ri">-</strong></div><div class="mc-row"><span>Landfall est.</span><strong id="euro-lf">-</strong></div></div></div>
-            <div class="model-card nam-card"><div class="mc-header"><span class="mc-name">NAM</span><span class="mc-sub">NOAA N. American 12km</span></div><div class="mc-body"><div class="mc-row"><span>72-hr intensity</span><strong id="nam-int">-</strong></div><div class="mc-row"><span>Track bias</span><strong id="nam-track">-</strong></div><div class="mc-row"><span>RI signal</span><strong id="nam-ri">-</strong></div><div class="mc-row"><span>Landfall est.</span><strong id="nam-lf">-</strong></div></div></div>
-            <div class="model-card ukmet-card"><div class="mc-header"><span class="mc-name">UKMET</span><span class="mc-sub">UK Met Office</span></div><div class="mc-body"><div class="mc-row"><span>72-hr intensity</span><strong id="uk-int">-</strong></div><div class="mc-row"><span>Track bias</span><strong id="uk-track">-</strong></div><div class="mc-row"><span>RI signal</span><strong id="uk-ri">-</strong></div><div class="mc-row"><span>Landfall est.</span><strong id="uk-lf">-</strong></div></div></div>
-          </div>
-        </section>
-        <section class="out-section" id="ai-section" style="display:none;"><p class="out-label">AI ensemble synthesis</p><div class="ai-output" id="ai-output"></div><div class="consensus-section" id="consensus-section"></div></section>
-        <div class="loading-bar" id="loading-bar" style="display:none;"><div class="loading-fill" id="loading-fill"></div></div>
-        <div class="error-msg" id="error-msg" style="display:none;"></div>
-      </div>
-    </div>
-  </main>
-  <footer class="site-footer"><p>10sion.net &mdash; Hurricane Model Center &mdash; For situational awareness only. Always follow <a href="https://www.nhc.noaa.gov" target="_blank" rel="noopener">NHC official advisories</a>.</p></footer>
-  <script src="/js/hurricane.js"></script>
+  </div>
+
 </body>
 </html>

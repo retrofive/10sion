@@ -8,8 +8,7 @@
   Cache-Control: public, max-age=86400
 
 /js/*
-  Cache-Control: public, max-age=86400
+  Cache-Control: no-cache, must-revalidate
 
 /api/*
   Cache-Control: no-store
-# updated

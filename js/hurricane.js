@@ -76,57 +76,23 @@ var REGION_CONFIG = {
   "Bay of Campeche":                      {l0:-98,l1:-86,a0:16,a1:27,   sLon:-93,sLat:18.5,dLon:-89.5,dLat:24,  wlbl:"Bay of Campeche",wlon:-92,wlat:20}
 };
 
-var _geoLoaded = false;
-var _worldTopo = null;
-var _usTopo = null;
-
-function loadGeoData(callback){
-  if(_geoLoaded){callback();return;}
-  var s=document.createElement("script");
-  s.src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js";
-  s.onload=function(){
-    var w=new XMLHttpRequest();
-    w.open("GET","https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json");
-    w.onload=function(){
-      _worldTopo=JSON.parse(w.responseText);
-      var u=new XMLHttpRequest();
-      u.open("GET","https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json");
-      u.onload=function(){_usTopo=JSON.parse(u.responseText);_geoLoaded=true;callback();};
-      u.send();
-    };
-    w.send();
-  };
-  document.head.appendChild(s);
-}
 
 function drawMap(sst,shear,pressure,region){
   var canvas=document.getElementById("trackMap");
   if(!canvas)return;
   var W=720,H=340;canvas.width=W;canvas.height=H;
   var ctx=canvas.getContext("2d");
+  var rc=REGION_CONFIG[region]||REGION_CONFIG["Gulf of Mexico - SW Florida approach"];
+  var l0=rc.l0,l1=rc.l1,a0=rc.a0,a1=rc.a1;
+  function proj(lon,lat){return[(lon-l0)/(l1-l0)*W,(a1-lat)/(a1-a0)*H];}
 
-  // Ocean fill immediately so it's never blank
   var seaG=ctx.createLinearGradient(0,0,0,H);
   seaG.addColorStop(0,"#0a2240");seaG.addColorStop(1,"#060f20");
   ctx.fillStyle=seaG;ctx.fillRect(0,0,W,H);
 
-  if(!_geoLoaded){
-    loadGeoData(function(){drawMap(sst,shear,pressure,region);});
-    ctx.fillStyle="rgba(120,180,240,0.3)";ctx.font="12px monospace";
-    ctx.textAlign="center";ctx.fillText("Loading map...",W/2,H/2);
-    return;
-  }
-
-  var rc=REGION_CONFIG[region]||REGION_CONFIG["Gulf of Mexico - SW Florida approach"];
-  var l0=rc.l0,l1=rc.l1,a0=rc.a0,a1=rc.a1;
-
-  function proj(lon,lat){return[(lon-l0)/(l1-l0)*W,(a1-lat)/(a1-a0)*H];}
-
-  // Subtle shimmer
   ctx.strokeStyle="rgba(20,70,130,0.06)";ctx.lineWidth=1;
   for(var y=20;y<H;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.bezierCurveTo(W*.3,y-3,W*.7,y+3,W,y);ctx.stroke();}
 
-  // Warm water tint
   if(region.indexOf("Gulf")!==-1||region.indexOf("Campeche")!==-1){
     var cx2=proj((l0+l1)/2,(a0+a1)*0.4);
     var warm=ctx.createRadialGradient(cx2[0],cx2[1],0,cx2[0],cx2[1],180);
@@ -134,67 +100,99 @@ function drawMap(sst,shear,pressure,region){
     ctx.fillStyle=warm;ctx.fillRect(0,0,W,H);
   }
 
-  // Draw a geometry
-  function pathGeo(geo){
-    ctx.beginPath();
-    function drawRings(rings){rings.forEach(function(ring){ring.forEach(function(pt,i){var q=proj(pt[0],pt[1]);i===0?ctx.moveTo(q[0],q[1]):ctx.lineTo(q[0],q[1]);});ctx.closePath();});}
-    if(geo.type==="Polygon")drawRings(geo.coordinates);
-    else if(geo.type==="MultiPolygon")geo.coordinates.forEach(drawRings);
-  }
-
-  // Bbox check
-  function inView(geo){
-    var mn=999,mx=-999,ma=999,xa=-999;
-    function wk(c){if(typeof c[0]==="number"){mn=Math.min(mn,c[0]);mx=Math.max(mx,c[0]);ma=Math.min(ma,c[1]);xa=Math.max(xa,c[1]);}else c.forEach(wk);}
-    if(geo.type==="Polygon")wk(geo.coordinates);
-    else if(geo.type==="MultiPolygon")geo.coordinates.forEach(function(c){wk(c);});
-    return mx>l0-2&&mn<l1+2&&xa>a0-2&&ma<a1+2;
-  }
-
   var lg=ctx.createLinearGradient(0,0,0,H);lg.addColorStop(0,"#1e3514");lg.addColorStop(1,"#192e10");
-
-  // World countries
-  var allC=topojson.feature(_worldTopo,_worldTopo.objects.countries);
-  allC.features.forEach(function(f){
-    if(!inView(f.geometry))return;
+  function land(pts){
     ctx.shadowColor="rgba(0,0,0,0.65)";ctx.shadowBlur=6;
-    pathGeo(f.geometry);ctx.fillStyle=lg;ctx.fill("evenodd");ctx.shadowBlur=0;
-    pathGeo(f.geometry);ctx.strokeStyle="rgba(155,210,110,0.45)";ctx.lineWidth=0.85;ctx.stroke();
-  });
+    ctx.beginPath();
+    pts.forEach(function(p,i){var q=proj(p[0],p[1]);i===0?ctx.moveTo(q[0],q[1]):ctx.lineTo(q[0],q[1]);});
+    ctx.closePath();ctx.fillStyle=lg;ctx.fill();ctx.shadowBlur=0;
+    ctx.beginPath();
+    pts.forEach(function(p,i){var q=proj(p[0],p[1]);i===0?ctx.moveTo(q[0],q[1]):ctx.lineTo(q[0],q[1]);});
+    ctx.closePath();ctx.strokeStyle="rgba(155,210,110,0.45)";ctx.lineWidth=0.85;ctx.stroke();
+  }
 
-  // US states
-  var allS=topojson.feature(_usTopo,_usTopo.objects.states);
-  var slbls={"48":"TX","22":"LA","28":"MS","01":"AL","12":"FL","13":"GA","45":"SC","37":"NC","51":"VA"};
-  allS.features.forEach(function(f){
-    if(!inView(f.geometry))return;
-    ctx.shadowColor="rgba(0,0,0,0.65)";ctx.shadowBlur=6;
-    pathGeo(f.geometry);ctx.fillStyle=lg;ctx.fill("evenodd");ctx.shadowBlur=0;
-    pathGeo(f.geometry);ctx.strokeStyle="rgba(155,210,110,0.45)";ctx.lineWidth=0.85;ctx.stroke();
-    pathGeo(f.geometry);ctx.strokeStyle="rgba(180,220,130,0.15)";ctx.lineWidth=0.5;ctx.setLineDash([3,4]);ctx.stroke();ctx.setLineDash([]);
-  });
+  // US mainland — top edge at lat 50 so canvas clips cleanly at viewport top
+  land([[-100,50],[-74,50],[-74,36],[-75,35.5],[-76,34.5],[-79,34],
+    [-80,33],[-80.5,32],[-81,31.5],[-81.5,30.5],[-82,29.8],[-82.5,29.5],
+    [-83,30.1],[-84,30.1],[-85,29.9],[-85.5,30.5],[-87,30.2],[-88,30.3],
+    [-88.5,30],[-89,29],[-89.5,29],[-90,28.7],[-91,29],[-93,29.5],
+    [-94,30],[-95.5,29],[-97,26],[-100,22],[-100,50]]);
 
-  // State labels
-  ctx.textAlign="center";ctx.textBaseline="middle";
-  ctx.fillStyle="rgba(200,235,160,0.45)";ctx.font="bold 9px 'IBM Plex Mono',monospace";
-  allS.features.forEach(function(f){
-    var lbl=slbls[f.id];if(!lbl||!inView(f.geometry))return;
-    var xs=[],ys=[];
-    function wc(c){if(typeof c[0]==="number"){xs.push(c[0]);ys.push(c[1]);}else c.forEach(wc);}
-    if(f.geometry.type==="Polygon")wc(f.geometry.coordinates);
-    else if(f.geometry.type==="MultiPolygon")f.geometry.coordinates.forEach(function(c){wc(c);});
-    var cx=xs.reduce(function(a,b){return a+b;},0)/xs.length;
-    var cy=ys.reduce(function(a,b){return a+b;},0)/ys.length;
-    if(cx<l0||cx>l1||cy<a0||cy>a1)return;
-    var q=proj(cx,cy);ctx.fillText(lbl,q[0],q[1]);
+  // Florida peninsula
+  land([[-87.6,30.5],[-85,29.9],[-84,30.1],[-83,30.2],[-82.5,29.6],
+    [-82,29.5],[-81.8,28.5],[-81.5,27],[-81.2,26],[-80.3,25.2],
+    [-80.0,24.7],[-80.7,24.5],[-81.5,24.6],[-82.0,24.8],
+    [-81.8,25.5],[-82,26.5],[-82.5,27.5],[-83.5,29.5],
+    [-84.5,30.2],[-85.5,30.5],[-87.6,30.5]]);
+
+  // Mexico Gulf coast — closes through interior so Bay of Campeche stays ocean
+  land([[-100,50],[-100,16],[-92,18],[-94,18],[-97,19],[-99,22],
+    [-100,28],[-100,50]]);
+
+  // Yucatan peninsula
+  land([[-90.5,21.5],[-89.5,21.5],[-87.5,21.5],[-87,20],[-86.5,19],
+    [-86.5,17.5],[-87,17],[-88,17],[-89,18.5],[-90,18.5],
+    [-90.5,20.5],[-90.5,21.5]]);
+
+  // Belize / Guatemala coast
+  land([[-89.5,18],[-87,17.5],[-87,16],[-89.5,16.5],[-89.5,18]]);
+
+  // Honduras north coast
+  land([[-89.5,16],[-83.5,16],[-83,15.5],[-89,15.5],[-89.5,16]]);
+
+  // Nicaragua, Costa Rica, Panama
+  land([[-83.5,15.5],[-83,14],[-83,9],[-79.5,8.5],[-79.5,6],
+    [-84,6],[-88,13],[-83.5,15.5]]);
+
+  // Cuba
+  land([[-85,22.5],[-84,22.8],[-82,23],[-80,23.2],[-79,23.5],
+    [-77.5,20],[-79,20],[-80.5,20.5],[-83,22],[-85,22.5]]);
+
+  // Hispaniola
+  land([[-74.5,19.5],[-73,19.8],[-71,19.9],[-69.6,19.4],
+    [-68.5,18.4],[-70,18],[-72,18.2],[-74,18.5],[-74.5,19.5]]);
+
+  // Puerto Rico
+  land([[-67.3,18.5],[-65.6,18.5],[-65.6,17.9],[-67.3,17.9]]);
+
+  // Jamaica
+  land([[-78.4,18.4],[-76.2,18.4],[-76.2,17.7],[-78.4,17.7]]);
+
+  // Bahamas
+  land([[-79.5,27.5],[-77,27.5],[-76.5,26.5],[-78,25.5],[-79.5,26]]);
+  land([[-76.5,25],[-75,25.2],[-74.5,24.2],[-76,24],[-76.5,25]]);
+
+  // Northern South America (Colombia / Venezuela coast)
+  land([[-80,6],[-60,6],[-60,11],[-61,12.5],[-64,11.5],[-68,12],
+    [-72,12.5],[-75.5,11],[-80,10.5],[-80,6]]);
+
+  // Lesser Antilles — each island as a small rectangle [nw-lon,n-lat,se-lon,s-lat]
+  [[[-63.1,18.2],[-62.5,17.7]],[[-62.1,17.2],[-61.7,16.8]],
+   [[-62.1,16.6],[-61.6,15.8]],[[-61.2,15.1],[-60.8,14.4]],
+   [[-61.1,14.1],[-60.8,13.3]],[[-61.5,13.4],[-61.0,12.8]],
+   [[-61.9,12.3],[-61.4,11.8]],[[-62.1,11.4],[-60.9,10.2]]
+  ].forEach(function(b){
+    land([[b[0][0],b[0][1]],[b[1][0],b[0][1]],[b[1][0],b[1][1]],[b[0][0],b[1][1]]]);
   });
 
   // Water label
   if(rc.wlbl){
     ctx.fillStyle="rgba(120,185,245,0.28)";ctx.font="italic 12px Georgia,serif";
+    ctx.textAlign="center";ctx.textBaseline="middle";
     var wq=proj(rc.wlon,rc.wlat);ctx.fillText(rc.wlbl,wq[0],wq[1]);
   }
 
-  // === Storm tracks ===
+  // State labels — only render if centroid is within canvas bounds
+  ctx.fillStyle="rgba(200,235,160,0.45)";ctx.font="bold 9px 'IBM Plex Mono',monospace";
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  [["FL",[-82,28]],["GA",[-83.5,32]],["TX",[-97,30]],["LA",[-91.5,31]],
+   ["MS",[-89,32]],["AL",[-87,32]],["SC",[-80.5,33]],["NC",[-79,35.5]],["VA",[-77,37]]
+  ].forEach(function(s){
+    var q=proj(s[1][0],s[1][1]);
+    if(q[0]>5&&q[0]<W-5&&q[1]>5&&q[1]<H-5)ctx.fillText(s[0],q[0],q[1]);
+  });
+
+  // Storm tracks
   var ri=sst>=86&&shear<=12;
   var sLon=rc.sLon+((1010-pressure)/130)*2;
   var sLat=rc.sLat+((sst-70)/26)*1;
@@ -206,7 +204,6 @@ function drawMap(sst,shear,pressure,region){
     {c:"#ff8c5a",w:1.5,d:[5,4], lv:0.15, lnv:0.65},
     {c:"#b08fff",w:1.5,d:[2,3], lv:1.05, lnv:-0.22}
   ];
-
   tracks.forEach(function(m){
     var scale=ri?1.3:0.85;
     ctx.save();ctx.globalAlpha=0.10;ctx.strokeStyle=m.c;ctx.lineWidth=8;ctx.setLineDash([]);
